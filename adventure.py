@@ -111,7 +111,7 @@ def proper_list_from_dict( d ):
 def log(message):
     now = datetime.datetime.now()
     current_time = "{}:{} {}/{}/{}".format(now.hour, now.minute, now.month, now.day, now.year)
-    logFile = open('log.txt', 'a')
+    logFile = open('runtime.log', 'a')
     logFile.write(current_time)
     logFile.write(message+"\n")
     logFile.close()
