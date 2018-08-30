@@ -230,6 +230,7 @@ class Game(Base):
                     except TypeError:
                         self.output = "You can't do that with {}".format(add_article(noun))
                         understood = True
+
                 ###### FOR USE OF THE player.go() FUNCTION WHICH CURRENTLY CAUSES SEVERAL BUGS
                 #if noun in directions:
                 #    if directions[noun] in current_location.connection:
