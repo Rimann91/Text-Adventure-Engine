@@ -88,7 +88,7 @@ def add_article ( name ):
 
 
 def remove_superfluous_input(text):
-  superfluous = articles +  ['to']
+  superfluous = articles +  ['to', 'using', 'with', 'on', 'at']
   rest = []
   for word in text.split():
     if word not in superfluous:
@@ -110,7 +110,7 @@ def proper_list_from_dict( d ):
 
 def log(message):
     now = datetime.datetime.now()
-    current_time = "{}:{} {}/{}/{}".format(now.hour, now.minute, now.month, now.day, now.year)
+    current_time = "{}:{} {}/{}/{} \n".format(now.hour, now.minute, now.month, now.day, now.year)
     logFile = open('runtime.log', 'a')
     logFile.write(current_time)
     logFile.write(message+"\n")
@@ -143,29 +143,38 @@ class Game(Base):
         self.locations[name] = place
         return self.locations[name]
     
-    def parse_command(self, text):
-        text = text.lower()
-        text = remove_superfluous_input(text)
-        text_list = text.split(' ')
-        return text
+    def parse_command(self, user_input):
+        # This method takes the user input and returns a "verb, noun, indirect noun" command
+        # EXAMPLE "unlock the door with the key" becomes {"verb": unlock, "noun": door, "inoun": key}
+        command_dict = {}
+        user_input = user_input.lower()
+        user_input = remove_superfluous_input(user_input)
+        user_input_list = user_input.split(' ')
+
+        if len(user_input_list) > 0:
+            command_dict['verb'] = user_input_list[0]
+
+        if len(user_input_list) > 1:
+            command_dict['noun'] =  user_input_list[1]
+
+        if len(user_input_list) > 2:
+            command_dict['inoun'] = user_input_list[2]
+
+        return command_dict
 
     def update(self, player, current_location):
         # if player moved, describe the room. But only if fresh location.
         # otherwise, only show the name of the room
         if player.moved:
-            
             print("\n<| {} |>".format(player.location.name))      # if moved, Display location name
             if current_location.fresh_location:
-                print(player.location.description)
-                if current_location.items:
-                    for k, v in current_location.items.items():
-                        print("there is {}".format(add_article(v.name)))
+                print(player.look())
                 self.locations[player.location.name]
                 current_location.fresh_location = False
 
     def run(self):
         running = True
-        log("="*100 +"\n---START RUNNING---")
+        log(" "+"="*100 +"\n---START RUNNING---")
         #print("+++++++++ NEW GAME +++++++++++")
         print(config.UserInfo.INTRODUCTION)
         user_name = str(input("What is your name? --> "))
@@ -182,55 +191,86 @@ class Game(Base):
             #command = remove_superfluous_input(user_input) 
             #command = command.lower()
             command = self.parse_command(user_input)
-            command_list = command.split(' ')                   # split the command up
-            verb = ""
+            #ommand_list = command.split(' ')                   # split the command up
+            #verb = ""
             item = ""
+            #inoun = command["inoun"]
             understood = False
 
-            if command == "quit":
+            if user_input == "quit" or user_input == 'q':
                 running = False
+                understood = True
 
-            for word in command_list: # see if command references a player verb
+            if "inoun" in command:
+                verb = command["verb"]
+                noun = command["noun"]
+                inoun = command["inoun"]
+                if verb in player.verbs:
+                    if noun in current_location.items or noun in player.inventory: # see if command refrences an item in the location
+                        if inoun in current_location.items or inoun in player.inventory: # see if command refrences an item in the location
+                            try:
+                                self.output = player.verbs[verb](noun, inoun)
+                                understood = True
+                            except TypeError:
+                                pass
+                        else:
+                            self.output = "there is no {} to use with the {}".format(inoun, noun)
+                            understood = True
+                    else:
+                        self.output = "there is no {} in sight!".format(noun)
+                        understood = True
 
-                # determines if the player wants to move locations and attempts to move them
-                if word in directions:
-                    #self.output = "you go {}".format(command)
-                    understood = True
-                    if directions[word] in current_location.connection:
-                        # update players location
-                        to_location =  player.set_location(current_location.connection[directions[word]])
+            elif "noun" in command:
+                verb = command["verb"]
+                noun = command["noun"]
+                if noun in current_location.items or noun in player.inventory: # see if command refrences an item in the location
+                    try:
+                        self.output = player.verbs[verb](noun)
+                        understood = True
+                    except TypeError:
+                        self.output = "You can't do that with {}".format(add_article(noun))
+                        understood = True
+                ###### FOR USE OF THE player.go() FUNCTION WHICH CURRENTLY CAUSES SEVERAL BUGS
+                #if noun in directions:
+                #    if directions[noun] in current_location.connection:
+                #        try:
+                #            self.output = player.verbs[verb](noun)
+                #            understood = True
+                #        except: 
+                #            pass
+                #    else:
+                #        self.output = "you can't go that way"
+                #        understood = True
+                #else:
+                    player.moved = False
+                
+            elif "verb" in command:
+                verb = command["verb"]
+                if verb in directions:
+                    if directions[verb] in current_location.connection:
+                       #  update players location
+                       # this should be condensed into the player.go() function at somepoint
+                        to_location =  player.set_location(current_location.connection[directions[verb]])
                         current_location = to_location[0]
                         self.output = to_location[1]
+                        #self.output = player.go(verb)
+                        understood = True
 
                     else:
                         self.output = "you can't go that way"
                         understood = True
                 else:
                     player.moved = False
-
-                # determines if the user input containes a verb, attempts to call a method assiciated with that verb
-                if word in player.verbs:
                     for v in player.verbs:
-                        if word == v:
-                            verb = v
+                        if verb == v:
                             try:
                                 self.output = player.verbs[verb]()
                                 understood = True
-                            except:
-                                break
+                            except TypeError:
+                                pass 
 
-                # determines if player is attempting to use a verb on an item eg. "drop key", "take knife"
-                # attempts to call a method associated with verb and pass in item as parameter
-                if word in current_location.items or word in player.inventory: # see if command refrences an item in the location
-                        try:
-                            self.output = player.verbs[verb](word)
-                            understood = True
-                        except:
-                            self.output = "You can't do that with {}".format(add_article(word))
-                            understood = True
-                
-                if not understood:
-                    self.output = "I don't understand"
+            if not understood:
+                self.output = "I don't understand"
 
             print(self.output)
 
@@ -260,26 +300,28 @@ class Player(Actor):
         self.verbs['inventory'] = self.check_inventory
         self.verbs['i'] = self.check_inventory
         self.verbs['look'] = self.look
-        #self.verbs['go']
+        #self.verbs['go'] = self.go
         self.verbs['verbs'] = self.give_help
         self.verbs['commands'] = self.give_help
         self.verbs['help'] = self.give_help
+        self.verbs['script'] = self.script
 
     def set_location(self, location):
-        need = ""
+        need = "" 
         feedback = ""
         if not location.requirements:
             self.location = location
             self.moved = True
         elif location.requirements:
             for i in location.requirements:
-                if i.name in self.inventory:
+                if i in self.inventory:
                     requirement_fullfilled = True
                 else:
                     requirement_fullfilled = False
                     break
-            for i in location.requirements:
-                need += add_article(i.name)+", "
+            #for i in location.requirements:
+            #    need += add_article(i.name)+", "
+            need = proper_list_from_dict(location.requirements)
             if requirement_fullfilled:
                 self.location = location
                 self.moved = True
@@ -291,6 +333,7 @@ class Player(Actor):
 
 
     def take(self, item):
+        self.moved = False
         if len(self.inventory) <= self.inventory_max:
             if item in self.location.items:
                 self.inventory[item] = self.location.items[item]
@@ -303,6 +346,7 @@ class Player(Actor):
      
 
     def drop(self, item):
+        self.moved = False
         if item in self.inventory:
             self.location.items[item] = self.inventory[item]
             del self.inventory[item]
@@ -310,32 +354,48 @@ class Player(Actor):
         else:
             return "you don't have one of those"
 
-    def look(self, item = None):
-        feedback = self.location.description+"\n"
-        for key, obj in self.location.items.items():
-            feedback += "there is {}\n".format(add_article(obj.name))
+    def look(self, noun = None, inoun = None):
+        self.moved = False
+        if noun != None:
+            if noun in self.inventory:
+                feedback = self.inventory[noun].description
+            elif noun in self.location.items:
+                feedback = self.location.items[noun].description
+        else:
+            feedback = self.location.description+"\n"
+            #for key, obj in self.location.items.items():
+            #    feedback += "there is {}\n".format(add_article(obj.name))
+            if self.location.items:
+                feedback += "There is " + proper_list_from_dict(self.location.items)
         return feedback 
 
     def check_inventory(self):
-        feedback = "you have...  "
-        for k, v in self.inventory.items():
-            item = add_article(v.name)
-            feedback += item+", "
+        self.moved = False
+        feedback = "you have...  " + proper_list_from_dict(self.inventory)
+
+        #for k, v in self.inventory.items():
+        #    item = add_article(v.name)
+        #    feedback += item+", "
         return feedback
 
     def give_help(self):
-        feedback = "Here are some commands I understand:"
+        self.moved = False
+        feedback = "Here are some commands I understand: \n"
         for i in self.verbs:
             feedback += i+"\n" 
         return feedback
 
 
-    def go(self):
-        pass
+    def go(self, direction):
+        to_location =  self.set_location(self.location.connection[directions[direction]])
+        self.location = to_location[0]
+        return  to_location[1]
 
-    def looked(self):
-        pass
-
+    def script(self):
+        string_script = input(">>> ")
+        print("Abraa Kadabraaa")
+        eval(string_script)
+        return "ALAKAZAM!"
 
 ###########################################################
 # Locations.... Rooms and map creation
@@ -344,7 +404,7 @@ class Player(Actor):
 class Location():
     def __init__(self, name, description):
         self.items =  {} 
-        self.requirements = [] 
+        self.requirements = {} 
         self.connection = {}
         self.name = name
         self.description = description
@@ -363,7 +423,7 @@ class Location():
                 print("error, something went wrong with connection method")
         
     def add_requirement(self, objItem):
-        self.requirements.extend(objItem)
+        self.requirements[objItem.name] = objItem
 
     def add_item(self, item):
         self.items[item.name] = item
@@ -373,8 +433,13 @@ class Location():
 #
 ###########################################################
 class Item():
-    def __init__(self, name, description):
+    def __init__(self, name, description, fixed = False, state = False):
         self.name = name
         self.description = description 
-        self.fixed = False
+        self.fixed = fixed 
+        self.state = state 
         self.damage = 0
+    
+    def do_thing(self):
+        action = None
+        return action

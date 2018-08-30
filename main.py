@@ -48,19 +48,22 @@ def main():
     sitting_room.add_item(lamp)
 
     attic.add_item(key)
-    attic.add_requirement([lamp])
+    attic.add_requirement(lamp)
 
     west_of_house.new_connection([DOWN], tunnel)
 
-    tunnel.add_requirement([lamp, key])
+    tunnel.add_requirement(key)
+    tunnel.add_requirement(lamp)
 
     game.start_location = "Front Porch"
 
+    # Start Game
     try:
         game.run()
     except:
-        print("An unexpected error occured:", sys.exc_info()[0])
-        log("Unhandled Exception:\n" + sys.exc_info()[0])
+        message = "An unexpected error occured:" + str(sys.exc_info())
+        print(message)
+        log(message)
 
 
 main()
