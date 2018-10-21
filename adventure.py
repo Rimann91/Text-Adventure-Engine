@@ -1,5 +1,5 @@
 from time import sleep
-import config
+import config 
 import datetime
 
 
@@ -64,6 +64,25 @@ define_direction( NORTH_EAST, "ne" )
 define_direction( SOUTH_WEST, "sw" )
 define_direction( SOUTH_EAST, "se" )
 
+# for giving direction feedback to the user
+direction_feedback = {
+    1: "north",
+    2: "south",
+    3: "east",
+    4: "west",
+    5: "up",
+    6: "down",
+    7: "right",
+    8: "left",
+    9: "in",
+    10: "out",
+    11: "forward",
+    12: "back",
+    13: "north west",
+    14: "north east",
+    15: "south west",
+    16: "south east",
+}
 
 articles = ['a', 'an', 'the']
 
@@ -121,7 +140,7 @@ def pause():
 
 
 """
-TODO[]: Add inoun functionality to existing functions
+TODO[x]: Add inoun functionality to existing functions
 TODO[]: Make a take all function
 TODO[]: Introduce conjuction functionality with 'and'
 
@@ -140,17 +159,20 @@ class Base(object):
         return self.command.lower()
 
 class Game(Base):
-    def __init__(self, name):
+    def __init__(self, name, player):
         Base.__init__(self, name)
+        self.player = player
         self.output = ""
+        self.event_output = ""
         self.locations = {}
-        self.start_location = ""
+        self.current_location = None 
+        self.run_count = 0
 
     def new_location(self, name, description):
         place = Location(name, description)
         self.locations[name] = place
         return self.locations[name]
-
+    
     def parse_command(self, user_input):
         # This method takes the user input and returns a "verb, noun, indirect noun" command
         # EXAMPLE "unlock the door with the key" becomes {"verb": unlock, "noun": door, "inoun": key}
@@ -170,136 +192,145 @@ class Game(Base):
 
         return command_dict
 
+    #def getNearbyItemNames(self):
+    #    nearby_items = []
+    #    for item in player.inventory:
+
+
     def update(self, player, current_location):
         # if player moved, describe the room. But only if fresh location.
         # otherwise, only show the name of the room
         if player.moved:
-            print("\n<| {} |>".format(player.location.name))      # if moved, Display location name
-            if current_location.fresh_location:
-                print(player.look())
+            self.player.location = self.current_location
+            print("\n<| {} |>".format(self.current_location.name))      # if moved, Display location name
+            if self.current_location.fresh_location:
+                print(self.player.look())
                 self.locations[player.location.name]
-                current_location.fresh_location = False
+                self.current_location.fresh_location = False
 
-    def run(self):
-        log("GAME STARTED")
-        running = True
+    def run(self, command):
+        self.output = ""
+        self.event_output = ""
+        #log("LOOP ITERATION {}".format(self.run_count))
 
-        #print("+++++++++ NEW GAME +++++++++++")
+        self.update(self.player, self.current_location)
 
-        # THIS NEEDS TO GO IN main.py
-        print(config.UserInfo.INTRODUCTION)
-        user_name = str(input("What is your name? --> "))
-        player = Player(user_name)
-        print("Glad to have you {} .... ".format(user_name))
-        pause()
-        print("GOOD LUCK !")
-        log("USERNAME: " + player.user_name)
-        current_location = player.set_location(self.locations[config.starting_location])[0]
-        pause()
-        log("STARTING GAME LOOP")
-        # end what needs to go in main.py 
+        #user_input = self.get_user_input()
+        user_input = command
+        command = self.parse_command(user_input)
+        understood = False
 
-        while running:
+        if user_input == "quit" or user_input == 'q':
+            running = False
+            understood = True
+            log("MANUAL EXIT OF GAME LOOP")
 
-            self.update(player, current_location)
-
-            user_input = self.get_user_input()
-            command = self.parse_command(user_input)
-            understood = False
-
-            if user_input == "quit" or user_input == 'q':
-                running = False
-                understood = True
-                log("MANUAL EXIT OF GAME LOOP")
-
-            if "inoun" in command:
-                verb = command["verb"]
-                noun = command["noun"]
-                inoun = command["inoun"]
-                if verb in player.verbs:
-                    if noun in current_location.items or noun in player.inventory: # see if command refrences an item in the location
-                        if inoun in current_location.items or inoun in player.inventory: # see if command refrences an item in the location
-                            try:
-                                self.output = player.verbs[verb](noun, inoun)
-                                understood = True
-                                print(self.output)
-                                continue
-                            except (TypeError, KeyError):
-                                pass
-                        else:
-                            self.output = "there is no {} to use with the {}".format(inoun, noun)
+        if "inoun" in command:
+            verb = command["verb"]
+            noun = command["noun"]
+            inoun = command["inoun"]
+            if verb in self.player.verbs:
+                if noun in self.current_location.items or noun in self.player.inventory: # see if command refrences an item in the location
+                    if inoun in self.current_location.items or inoun in self.player.inventory: # see if command refrences an item in the location
+                        try:
+                            self.output = self.player.verbs[verb](verb, noun, inoun)
                             understood = True
+                            #print(self.output)
+                            return (self.output, self.event_output)
+                        except (TypeError, KeyError):
+                            pass
                     else:
-                        self.output = "there is no {} in sight!".format(noun)
-                        understood = True
-
-            elif "noun" in command:
-                verb = command["verb"]
-                noun = command["noun"]
-                if noun in current_location.items or noun in player.inventory: # see if command refrences an item in the location
-                    try:
-                        self.output = player.verbs[verb](noun)
-                        understood = True
-                        print(self.output)
-                        continue
-                    except (TypeError, KeyError):
-                        self.output = "You can't do that with {}".format(add_article(noun))
-                        understood = True
-
-                for i in player.location.items:
-                    objItem = player.location.items[i]
-                    if isinstance(objItem, Container):
-                        if objItem.state:
-                            if noun in objItem.contents:
-                                self.output = player.verbs[verb](noun)
-                                understood = True
-                                print(self.output)
-                                break
-                player.moved = False
-                continue
-                ###### FOR USE OF THE player.go() FUNCTION WHICH CURRENTLY CAUSES SEVERAL BUGS
-                #if noun in directions:
-                #    if directions[noun] in current_location.connection:
-                #        try:
-                #            self.output = player.verbs[verb](noun)
-                #            understood = True
-                #        except: 
-                #            pass
-                #    else:
-                #        self.output = "you can't go that way"
-                #        understood = True
-                #else:
-                
-            elif "verb" in command:
-                verb = command["verb"]
-                if verb in directions:
-                    if directions[verb] in current_location.connection:
-                       #  update players location
-                       # this should be condensed into the player.go() function at somepoint
-                        to_location =  player.set_location(current_location.connection[directions[verb]])
-                        current_location = to_location[0]
-                        self.output = to_location[1]
-                        #self.output = player.go(verb)
-                        understood = True
-
-                    else:
-                        self.output = "you can't go that way"
+                        self.output = "there is no {} to use with the {}".format(inoun, noun)
                         understood = True
                 else:
-                    player.moved = False
-                    for v in player.verbs:
-                        if verb == v:
+                    self.output = "there is no {} in sight!".format(noun)
+                    understood = True
+
+        elif "noun" in command:
+            verb = command["verb"]
+            noun = command["noun"]
+            if noun in self.current_location.items or noun in self.player.inventory: # see if command refrences an item in the location
+                try:
+                    self.output = self.player.verbs[verb](verb, noun)
+                    understood = True
+                    #print(self.output)
+                    return (self.output, self.event_output)
+                    #continue
+                except (TypeError, KeyError):
+                    self.output = "You can't do that with {}".format(add_article(noun))
+                    understood = True
+            # check if noun is a connection obstacle
+            else:
+                for k, connection in self.current_location.connection.items():
+                    if connection.obstacle != None:
+                        if connection.obstacle.name == noun:
                             try:
-                                self.output = player.verbs[verb]()
+                                self.output = self.player.verbs[verb](verb, noun)
                                 understood = True
-                                break
+                                #print(self.output)
+                                return (self.output, self.event_output)
+                                #continue
                             except (TypeError, KeyError):
-                                pass 
+                                self.output = "You can't do that with {}".format(add_article(noun))
+                                understood = True
 
-            if not understood:
-                self.output = "I don't understand"
+            for i in self.player.location.items:
+                objItem = self.player.location.items[i]
+                if isinstance(objItem, Container):
+                    if objItem.state:
+                        if noun in objItem.contents:
+                            self.output = self.player.verbs[verb](verb, noun)
+                            understood = True
+                            #print(self.output)
+            self.player.moved = False
+            return (self.output, self.event_output)
+            #continue
+            ###### FOR USE OF THE self.player.go() FUNCTION WHICH CURRENTLY CAUSES SEVERAL BUGS
+            #if noun in directions:
+            #    if directions[noun] in self.current_location.connection:
+            #        try:
+            #            self.output = self.player.verbs[verb](noun)
+            #            understood = True
+            #        except: 
+            #            pass
+            #    else:
+            #        self.output = "you can't go that way"
+            #        understood = True
+            #else:
+            
+        elif "verb" in command:
+            verb = command["verb"]
+            if verb in directions:
+                if directions[verb] in self.current_location.connection:
+                    #  update self.players location
+                    # this should be condensed into the self.player.go() function at somepoint
+                    connection = self.current_location.connection[directions[verb]]
+                    to_location =  self.player.set_location(self.current_location.connection[directions[verb]].connected_location, directions[verb])
+                    self.current_location = to_location[0]
+                    self.output = to_location[1]
+                    #self.output = self.player.go(verb)
+                    understood = True
 
-            print(self.output)
+                else:
+                    self.output = "you can't go that way"
+                    understood = True
+            else:
+                self.player.moved = False
+                for v in self.player.verbs:
+                    if verb == v:
+                        try:
+                            self.output = self.player.verbs[verb]()
+                            understood = True
+                            break
+                        except (TypeError, KeyError):
+                            pass 
+
+        if not understood:
+            self.output = "I don't understand"
+
+        #print(self.output)
+        self.run_count += 1
+        return (self.output, self.event_output)
 
 
 ##########################################################
@@ -311,7 +342,7 @@ class Actor(object):
         self.health = 100
         self.inventory = {}
         self.inventory_max = 2
-        self.moved = False
+        self.moved = True 
         self.location = None
 
 class Player(Actor):
@@ -319,31 +350,75 @@ class Player(Actor):
         Actor.__init__(self, user_name)
         self.user_name = user_name
         self.saved_progress = None
-        self.verbs = {}
+        self.verbs = {
+            #"unlock"
+            #"turn"
+            "go": self.go,
+            "take" : self.take,
+            "get": self.take,
+            "drop": self.drop,
+            "put": self.drop,
+            "inventory": self.check_inventory,
+            "i": self.check_inventory,
+            "look": self.look,
+            "open": self.switch_item_state,
+            "close": self.switch_item_state,
+            "verbs": self.give_help,
+            "commands": self.give_help,
+            "help": self.give_help,
+            "script": self.script,
+            "unlock": self.unlock
+        }
 
-        self.verbs['take'] = self.take
-        self.verbs['get'] = self.take
-        self.verbs['drop'] = self.drop
-        self.verbs['put'] = self.drop
-        self.verbs['inventory'] = self.check_inventory
-        self.verbs['i'] = self.check_inventory
-        self.verbs['look'] = self.look
-        self.verbs['open'] = self.switch_item_state
-        self.verbs['close'] = self.switch_item_state
-        #self.verbs['unlock']
-        #self.verbs['turn']
-        #self.verbs['go'] = self.go
-        self.verbs['verbs'] = self.give_help
-        self.verbs['commands'] = self.give_help
-        self.verbs['help'] = self.give_help
-        self.verbs['script'] = self.script
+        #self.verbs['take'] = self.take
+        #self.verbs['get'] = self.take
+        #self.verbs['drop'] = self.drop
+        #self.verbs['put'] = self.drop
+        #self.verbs['inventory'] = self.check_inventory
+        #self.verbs['i'] = self.check_inventory
+        #self.verbs['look'] = self.look
+        #self.verbs['open'] = self.switch_item_state
+        #self.verbs['close'] = self.switch_item_state
+        ##self.verbs['unlock']
+        ##self.verbs['turn']
+        ##self.verbs['go'] = self.go
+        #self.verbs['verbs'] = self.give_help
+        #self.verbs['commands'] = self.give_help
+        #self.verbs['help'] = self.give_help
+        #self.verbs['script'] = self.script
 
-    def set_location(self, location):
+    def set_start_location(self, location):
+        self.moved = True
+        self.location = location
+        return self.location
+
+    def set_location(self, location, direction):
         need = "" 
         feedback = ""
-        if not location.requirements:
-            self.location = location
-            self.moved = True
+        if self.location.connection[direction].obstacle != None:
+            obstacle = self.location.connection[direction].obstacle
+            if obstacle.state:
+                if not location.requirements:
+                    self.location = location
+                    self.moved = True
+                elif location.requirements:
+                    for i in location.requirements:
+                        if i in self.inventory:
+                            requirement_fullfilled = True
+                        else:
+                            requirement_fullfilled = False
+                            break
+
+                    need = proper_list_from_dict(location.requirements)
+                    if requirement_fullfilled:
+                        self.location = location
+                        self.moved = True
+                        feedback = "using {} you enter the {}".format(need, location.name)
+                        self.moved = True
+                    else:
+                        feedback = "you are unable to go there without {}".format(need)
+            else:
+                feedback = "there is a {} in the way".format(obstacle.name)
         elif location.requirements:
             for i in location.requirements:
                 if i in self.inventory:
@@ -360,11 +435,28 @@ class Player(Actor):
                 self.moved = True
             else:
                 feedback = "you are unable to go there without {}".format(need)
+        else:
+            self.location = location
+            self.moved = True
+            feedback = "using {} you enter the {}".format(need, location.name)
+            self.moved = True
 
         return self.location, feedback
 
 
-    def take(self, item):
+    def unlock(self, verb, item):
+        feedback = ""
+        if item in self.location.items:
+            feedback = self.location.items[item].unlock()
+        elif item not in self.location.items:
+            for k, connection in self.location.connection.items():
+                if connection.obstacle != None:
+                    if item == connection.obstacle.name:
+                        connection.obstacle.unlock()
+        return feedback
+
+
+    def take(self, verb, item):
         """ Takes item from location or from a container """
         self.moved = False
         if len(self.inventory) <= self.inventory_max:
@@ -395,7 +487,7 @@ class Player(Actor):
         return feedback
      
 
-    def drop(self, noun, inoun = None):
+    def drop(self, verb, noun, inoun = None):
 
         """ Drops an item carried in player.inventory
         Items can be droped into the current location or droped into containers
@@ -423,6 +515,7 @@ class Player(Actor):
         return feedback
 
     def look(self, noun = None, inoun = None):
+        feedback = ""
         self.moved = False
         if noun != None:
             if noun in self.inventory:
@@ -433,11 +526,13 @@ class Player(Actor):
                     feedback += ". it contains {}".format(proper_list_from_dict(self.location.items[noun].contents)) # lIST THE CONTENTS OF CONTAINER
         else:
             feedback = self.location.description
+        #    if self.location.connection:
+        #        feedback += ". There is " + self.location.list_connections()
             if self.location.items:
                 feedback += ". There is " + proper_list_from_dict(self.location.items)
         return feedback
     
-    def switch_item_state(self, item):
+    def switch_item_state(self, verb, item):
         """ Player method that switches the state of an item
         Used to turn things on or off, open or close, enable disable, etc...
         """
@@ -448,15 +543,26 @@ class Player(Actor):
             objItem = self.inventory[item]
             if not objItem.locked:
                 feedback = "the {} is ".format(objItem.name)
-                feedback += objItem.switch_state()
+                feedback += objItem.switch_state(verb)
         
         elif item in self.location.items:
             objItem = self.location.items[item]
             if not objItem.locked:
                 feedback = "the {} is ".format(objItem.name)
-                feedback += objItem.switch_state()
-        
+                feedback += objItem.switch_state(verb)
+
         else:
+            for k, v in self.location.connection.items():
+                if v.obstacle != None:
+                    if item == v.obstacle.name:
+                        objItem = v.obstacle
+                        if not objItem.locked:
+                            feedback = "the {} is ".format(objItem.name)
+                            feedback += objItem.switch_state(verb)
+                        else:
+                            feedback = objItem.locked_response
+        
+        if feedback == "":
             feedback = "do what?"
 
         return feedback
@@ -469,7 +575,7 @@ class Player(Actor):
         feedback = "you have...  " + proper_list_from_dict(self.inventory)
         return feedback
 
-    def give_help(self):
+    def give_help(self, verb):
         self.moved = False
         feedback = "Here are some commands I understand: \n"
         for i in self.verbs:
@@ -481,7 +587,7 @@ class Player(Actor):
         self.location = to_location[0]
         return  to_location[1]
 
-    def script(self):
+    def script(self, verb):
         string_script = input(">>> ")
         print("Abraa Kadabraaa")
         eval(string_script)
@@ -500,15 +606,15 @@ class Location():
         self.description = description
         self.fresh_location = True
 
-    def new_connection(self, listDirections, connected_location):
+    def add_connection(self, obj_connection):
         # make connection to next room
-        for direction in listDirections:
-            self.connection[direction] = connected_location
+        for direction in obj_connection.list_directions:
+            self.connection[direction] = obj_connection.connected_location
             # reverse connection back
             if direction % 2 > 0:
-                connected_location.connection[direction+1] = self
+                obj_connection.connected_location.connection[direction+1] = self
             elif direction % 2 == 0:
-                connected_location.connection[direction-1] = self
+                obj_connection.connected_location.connection[direction-1] = self
             else:
                 print("WARNING: something went wrong with connection method")
                 log("WARNING: something went wrong with connection method")
@@ -518,6 +624,57 @@ class Location():
 
     def add_item(self, item):
         self.items[item.name] = item
+    
+    #def list_connections(self):
+    #    count = len(self.connection)
+    #    str_listConnections = ""
+    #    if self.connection:
+    #        for k, c in self.connection.items():
+    #            str_listConnections += " {} to your {}".format(c.description, direction_feedback[c.list_directions[0]])
+    #            if count > 1:
+    #                str_listConnections += ","
+    #            elif count == 1:
+    #                str_listConnections +="."
+    #            count -= 1
+    #    return str_listConnections
+            
+
+class Connection():
+    def __init__(self, list_directions, this_location, connected_location, description, obstacle = None):
+        self.description = description
+        self.list_directions = list_directions
+        self.connected_location = connected_location
+        self.obstacle = obstacle 
+        return_directions = []
+
+        # this creates a new connection object for the conected location
+        # Although the connections are seperate they will share the same obstacle object 
+        for direction in list_directions:
+            this_location.connection[direction] = self 
+            # reverse connection back
+            if direction % 2 > 0:
+                #return_direction = connected_location.connection[direction+1] = self
+                return_directions.append(direction+1)
+            elif direction % 2 == 0:
+                #return_direction = connected_location.connection[direction-1] = self
+                return_directions.append(direction-1)
+            else:
+                print("WARNING: something went wrong with connection method")
+                log("WARNING: something went wrong with connection method")
+
+
+        if connected_location.connection:
+            if not any(return_directions[i] in list(connected_location.connection) for i in range(len(return_directions))): 
+                reverse_connection = Connection(return_directions, self.connected_location, this_location, self.description,  self.obstacle)
+        else:
+            reverse_connection = Connection(return_directions, self.connected_location, this_location, self.description,  self.obstacle)
+
+        
+    
+    def has_obstacle(self):
+        if not self.obstacle: return True
+        else: return False
+
 
 ###########################################################
 # Game Items
@@ -532,30 +689,84 @@ class Item():
         self.damage = 0
         self.state_switch_feedback = ()  #("on", "off") ("open", "closed")
         self.locked = False
-        self.requirements = {}
+        self.locked_response = ""
+        self.unlock_required_item = None
+        #self.requirements = {}
+
+        # Callbacks
+        self.on_state_true_callback = None
+        self.on_state_false_callback = None
+        self.on_unlocked_callback = None
+        #self.on_locked_callback = None
     
-    def do_thing(self):
-        action = None
-        return action
+    # Event Callback Setters
+    def on_state_true(self, callback):
+        self.on_state_true_callback = callback 
     
+    def on_state_false(self, callback):
+        self.on_state_false_callback = callback
+
+    def on_unlocked(self, callback):
+        self.on_unlocked_callback = callback
+
+    #def on_locked(self, callback):
+    #    self.on_locked_callback = callback
+   
     def set_fixed(self):
         self.fixed = True
 
-    def switch_state(self):
+    # Item Methods
+    def switch_state(self, verb):
         # maybe the indexes need to be switched
-        feedback = ""
-        if self.state_switch_feedback:
-            self.state = not self.state
-            if self.state:
-                feedback = self.state_switch_feedback[0]
+        if self.locked == False:
+            feedback = ""
+            if self.state_switch_feedback:
+                true_state = self.state_switch_feedback[0]
+                false_state = self.state_switch_feedback[1]
+                if verb == true_state:
+                    self.state = not self.state
+                    feedback = true_state 
+                    if self.on_state_true_callback:
+                        callback_response = self.on_state_true_callback()
+                        #if callback_response:
+                        #    feedback = callback_response
+                else:
+                    self.state = not self.state
+                    feedback = false_state 
+                    if self.on_state_false_callback:
+                        callback_response = self.on_state_false_callback()
+                        #if callback_response:
+                        #    feedback = callback_response
             else:
-                feedback = self.state_switch_feedback[1]
+                print("WARNING: cannot switch the state of an item without defining a feedback tuple")
+                log("WARNING: cannot switch the state of an item without defining a feedback tuple")
         else:
-            print("WARNING: cannot switch the state of an item without defining a feedback tuple")
-            log("WARNING: cannot switch the state of an item without defining a feedback tuple")
+            feedback = self.locked_response
+        return feedback
+
+    def unlock(self, verb = None):
+        feedback = ""
+        if self.locked:
+            if self.unlock_required_item == None:
+                self.locked = False
+                if self.on_unlocked_callback:
+                    self.on_unlocked_callback()
+            else:
+                #check player for requirements
+                pass
+        else:
+            feedback = config.DefaultResponse.nothing_intersting 
         return feedback
 
 class Container(Item):
     def __init__ (self, name, description, fixed = False, state = False):
         Item.__init__(self, name, description, fixed = False, state = False)
         self.contents = {}
+    
+class Obstacle(Item):
+    """ Various obstacels, This object should be passed into location connections for doors etc.."""
+    def __init__(self, name, description, fixed = True, state = True):
+        Item.__init__(self, name, description, fixed, state)
+        self.do_list = False
+
+

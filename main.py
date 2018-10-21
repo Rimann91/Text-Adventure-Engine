@@ -1,14 +1,34 @@
 from adventure import *
+import config
 import traceback
-game = Game("Adventure")
 ## TEST GAME CALL
 log(" "+"="*100 +"\n---START RUNNING---")
+
+
+print(config.UserInfo.INTRODUCTION)
+user_name = str(input("What is your name? --> "))
+player = Player(user_name)
+print("Glad to have you {} .... ".format(user_name))
+pause()
+print("GOOD LUCK !")
+log("USERNAME: " + player.user_name)
+game = Game("Adventure", player)
+#current_location = player.set_location(self.locations[config.starting_location], None)[0]
+pause()
+
+def chest_gets_opened():
+    game.event_output = "The chest creaks open"
+    
+
+def unlock_front_door():
+    game.event_output = "click... it unlocked"
+
 def build():
 
     # Define game locations (map)
     front_porch = game.new_location(
             "Front Porch",
-            "You are on a porch to a house, there is a door to your north, a staircase decends to the street",
+            "You are on a porch to a house",
             )
     sitting_room = game.new_location(
             "Sitting Room",
@@ -53,27 +73,45 @@ def build():
     chest.contents["sword"] = sword
     chest.state_switch_feedback = ("open", "closed")
 
-    front_porch.new_connection([NORTH], sitting_room)
-    front_porch.new_connection([SOUTH], sidewalk)
+
+        
+    
+    chest.on_state_true(chest_gets_opened)
+
+    # FRONT PORCH
     front_porch.add_item(fmap)
-    front_porch.add_item(apple)
+    front_porch.add_item(chest)
+    front_door = Obstacle("door", " a normal door with a bolt lock", state = False)
+    front_door.locked = True
+    front_door.locked_response = "It's locked, I wonder if there is a key"
+    front_door.on_unlocked(unlock_front_door)
+    front_door.state_switch_feedback = ("open", "closed")
+    cnct_sitting_room = Connection([NORTH], front_porch, sitting_room, "front door to the house", front_door)
+    cnct_sidewalk = Connection([SOUTH], front_porch, sidewalk, "set of steps leading off the porch")
 
-    sidewalk.new_connection([WEST], west_of_house)
-
-    sitting_room.new_connection([EAST, UP], attic)
+    # SITTING ROOM
     sitting_room.add_item(knife)
     sitting_room.add_item(lamp)
+    cnct_attic = Connection([UP, EAST], sitting_room, attic, "stairs leading up")
+
+    # ATTIC
     attic.add_item(key)
     attic.add_item(rope)
     attic.add_requirement(lamp)
 
-    west_of_house.new_connection([DOWN], tunnel)
+    # SIDEWALK - WEST OF HOUSE
+    
+    cellar_door = Obstacle("door", "a sturdy old door covering an entrance into the ground", state = False)
+    cellar_door.state_switch_feedback = ("open", "closed")
+    cnct_west_of_house = Connection([WEST], sidewalk, west_of_house, "pathway")
+    cnct_tunnel = Connection([DOWN], west_of_house, tunnel, "a sturdy cellar door", obstacle = cellar_door)
+    #west_of_house.new_connection([DOWN], tunnel)
 
-    tunnel.new_connection([SOUTH], cavern)
+    #tunnel.new_connection([SOUTH], cavern)
     tunnel.add_requirement(key)
     tunnel.add_requirement(lamp)
 
-    cavern.new_connection([DOWN], bottom_of_pit)
+    #cavern.new_connection([DOWN], bottom_of_pit)
     #cavern.new_connection()
     #cavern.new_connection()
     cavern.add_item(rope)
@@ -81,26 +119,8 @@ def build():
     bottom_of_pit.add_item(chest)
     bottom_of_pit.add_requirement(rope)
 
-    game.start_location = "Front Porch"
+    #game.start_location = "Front Porch"
 
-def main():
+    #current_location = player.set_start_location(game.locations[config.starting_location])
+    game.current_location = front_porch
 
-    log("BUILDING GAME")
-    try:
-        build()
-        log("GAME BUILD SUCCESSFULL")
-    except:
-        print("Unexpected Error: problem in main.py with build() function")
-        log("Unexpected Error: problem in main.py with build() function\n"+traceback.format_exc())
-        raise
-
-    log("STARTING GAME")
-    try:
-        game.run()
-    except:
-        print("WARNING: An unexpected error occured. Check the runtime log for traceback")
-        log("An unexpected error occured\n"+traceback.format_exc())
-        raise
-    log("GAME CLOSED")
-
-main()

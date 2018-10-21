@@ -3,11 +3,16 @@ class UserInfo:
     RULES = ""
 
 
-class Response:
+class DefaultResponse:
     # responses for the player.take(method)
-    wont_move = [] 
-    max_inventory = []
+    wont_move = "hnnng.... the thing doesn't budge" 
+    max_inventory = "ypu don't have anymore room, maybe drop something" 
+    unlock = "it unlocks"
+    nothing_interesting = "nothing interesting happens"
+
 
 pause_time = 0.5
 starting_location = "Front Porch"
 max_inventory = 4
+
+
